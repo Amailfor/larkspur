@@ -50,7 +50,7 @@ export default function AllowedUrlsPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    fetch('/allowlist', { cache: 'no-store' })
+    fetch('/api/allowed_urls', { cache: 'no-store' })
       .then((response) => response.json())
       .then((rawData: unknown) => {
         const data = normalizeConfig(rawData)
@@ -67,7 +67,7 @@ export default function AllowedUrlsPage() {
 
   async function unlock(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const response = await fetch('/allowlist', {
+    const response = await fetch('/api/allowed_urls', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password }),
@@ -94,7 +94,7 @@ export default function AllowedUrlsPage() {
 
   async function save() {
     setError('')
-    const response = await fetch('/allowlist', {
+    const response = await fetch('/api/allowed_urls', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title, allowed_urls: urls }),
