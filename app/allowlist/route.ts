@@ -35,15 +35,31 @@ export async function PUT(request: NextRequest) {
 
   const body = await request.json().catch(() => null)
   const title = typeof body?.title === 'string' ? body.title.trim() : ''
-  const urls = Array.isArray(body?.allowed_urls) ? body.allowed_urls : []
-  if (!title || urls.length === 0 || urls.some((value: unknown) => typeof value !== 'string' || !/^https?:\/\/[^/]+$/.test(value))) {
-    return Response.json({ error: 'Enter a title and valid URL origins.' }, { status: 400 })
+  const urls = Array.isArray(body?.allowed_urls)
+    ? body.allowed_urls.map((value: unknown) => (typeof value === 'string' ? value.trim() : value))
+    : []
+  const validUrls = urls.every((value: unknown) => {
+    if (typeof value !== 'string') return false
+    try {
+      const parsed = new URL(value)
+      return ['http:', 'https:'].includes(parsed.protocol) && parsed.pathname === '/' && !parsed.search && !parsed.hash
+    } catch {
+      return false
+    }
+  })
+
+  if (!title || urls.length === 0 || !validUrls || new Set(urls).size !== urls.length) {
+    return Response.json({ error: 'Enter a title and unique valid URL origins.' }, { status: 400 })
   }
 
-  await db.execute(sql`
-    INSERT INTO allowlist_config (id, title, allowed_urls, updated_at)
-    VALUES (1, ${title}, ${JSON.stringify(urls)}::jsonb, now())
-    ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, allowed_urls = EXCLUDED.allowed_urls, updated_at = now()
-  `)
-  return Response.json({ title, allowed_urls: urls })
+  try {
+    await db.execute(sql`
+      INSERT INTO allowlist_config (id, title, allowed_urls, updated_at)
+      VALUES (1, ${title}, ${JSON.stringify(urls)}::jsonb, now())
+      ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, allowed_urls = EXCLUDED.allowed_urls, updated_at = now()
+    `)
+    return Response.json({ title, allowed_urls: urls }, { headers: { 'Cache-Control': 'no-store' } })
+  } catch {
+    return Response.json({ error: 'The URL list could not be saved.' }, { status: 500 })
+  }
 }
