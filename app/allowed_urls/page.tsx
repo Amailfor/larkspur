@@ -6,6 +6,27 @@ import { Check, Copy, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react'
 type AllowedUrl = { url: string; comment?: string }
 type Config = { title: string; allowed_urls: AllowedUrl[]; can_edit?: boolean }
 
+function normalizeConfig(value: unknown): Config | null {
+  if (typeof value === 'string') {
+    try {
+      return normalizeConfig(JSON.parse(value))
+    } catch {
+      return null
+    }
+  }
+  if (!value || typeof value !== 'object') return null
+  const candidate = value as { title?: unknown; allowed_urls?: unknown; can_edit?: unknown }
+  if (typeof candidate.title !== 'string' || !Array.isArray(candidate.allowed_urls)) return null
+  const allowed_urls = candidate.allowed_urls.flatMap((item): AllowedUrl[] => {
+    if (typeof item === 'string' && item.trim()) return [{ url: item.trim() }]
+    if (!item || typeof item !== 'object') return []
+    const entry = item as { url?: unknown; comment?: unknown }
+    if (typeof entry.url !== 'string' || !entry.url.trim()) return []
+    return [{ url: entry.url.trim(), ...(typeof entry.comment === 'string' && entry.comment.trim() ? { comment: entry.comment.trim() } : {}) }]
+  })
+  return { title: candidate.title, allowed_urls, can_edit: candidate.can_edit === true }
+}
+
 const fallback: Config = {
   title: 'URL allowlist',
   allowed_urls: [
@@ -31,7 +52,9 @@ export default function AllowedUrlsPage() {
     const params = new URLSearchParams(window.location.search)
     fetch('/allowlist', { cache: 'no-store' })
       .then((response) => response.json())
-      .then((data: Config) => {
+      .then((rawData: unknown) => {
+        const data = normalizeConfig(rawData)
+        if (!data) throw new Error('Invalid allowlist response')
         setUnlocked(params.get('edit') === '1' && data.can_edit === true)
         setConfig(data)
         setTitle(data.title)
