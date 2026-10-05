@@ -14,6 +14,13 @@ const defaults = {
 }
 
 function normalizeUrls(value: unknown): AllowedUrl[] {
+  if (typeof value === 'string') {
+    try {
+      return normalizeUrls(JSON.parse(value))
+    } catch {
+      return []
+    }
+  }
   if (!Array.isArray(value)) return []
   return value.flatMap((item) => {
     if (typeof item === 'string') return [{ url: item }]
