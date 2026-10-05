@@ -43,7 +43,7 @@ export default function Page() {
   const [allowedSites, setAllowedSites] = useState<AllowedUrl[]>(fallbackSites)
 
   useEffect(() => {
-    fetch('/allowlist', { cache: 'no-store' })
+    fetch('/api/allowed_urls', { cache: 'no-store' })
       .then((response) => (response.ok ? response.json() : null))
       .then((data: AllowlistConfig | null) => {
         if (!data || !Array.isArray(data.allowed_urls)) return
