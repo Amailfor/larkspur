@@ -1,74 +1,31 @@
 'use client'
 
-import { FormEvent, useState } from 'react'
-import { Check, Clipboard, Copy, Globe2, Plus, ShieldCheck, Trash2 } from 'lucide-react'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { Check, Copy, LockKeyhole, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react'
 
-const initialUrls = ['https://github.com', 'https://www.youtube.com', 'https://en.wikipedia.org']
+type Config = { title: string; allowed_urls: string[] }
+const fallback: Config = { title: 'URL allowlist', allowed_urls: ['https://github.com', 'https://www.youtube.com', 'https://en.wikipedia.org'] }
 
 export default function SlashAllowlistPage() {
-  const [urls, setUrls] = useState(initialUrls)
+  const [config, setConfig] = useState<Config>(fallback)
+  const [title, setTitle] = useState(fallback.title)
+  const [urls, setUrls] = useState(fallback.allowed_urls)
   const [url, setUrl] = useState('')
+  const [password, setPassword] = useState('')
+  const [unlocked, setUnlocked] = useState(false)
+  const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
 
-  const json = JSON.stringify({ allowlist: urls }, null, 2)
+  useEffect(() => { fetch('/allowlist').then((response) => response.json()).then((data: Config) => { setConfig(data); setTitle(data.title); setUrls(data.allowed_urls) }).catch(() => {}) }, [])
+  const json = useMemo(() => JSON.stringify({ allowed_urls: config.allowed_urls, title: config.title }, null, 2), [config])
 
-  function addUrl(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const value = url.trim()
-    if (!value) return
+  async function unlock(event: FormEvent) { event.preventDefault(); const response = await fetch('/allowlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) }); if (!response.ok) return setError('Incorrect password.'); setUnlocked(true); setError('') }
+  function addUrl(event: FormEvent) { event.preventDefault(); const value = url.trim(); try { const parsed = new URL(value); const normalized = `${parsed.protocol}//${parsed.host}`; if (!['http:', 'https:'].includes(parsed.protocol) || urls.includes(normalized)) throw new Error(); setUrls([...urls, normalized]); setUrl(''); setError('') } catch { setError('Enter a new valid http:// or https:// URL.') } }
+  async function save() { const response = await fetch('/allowlist', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, allowed_urls: urls }) }); if (!response.ok) return setError('Could not save changes.'); const data = await response.json(); setConfig(data); setMessage('Saved to Neon database.'); setError(''); setTimeout(() => setMessage(''), 2500) }
+  async function copyJson() { await navigator.clipboard?.writeText(json); setCopied(true); setTimeout(() => setCopied(false), 1500) }
 
-    try {
-      const parsed = new URL(value)
-      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error()
-      const normalized = `${parsed.protocol}//${parsed.host}`
-      if (urls.includes(normalized)) {
-        setError('That URL is already on the allowlist.')
-        return
-      }
-      setUrls((current) => [...current, normalized])
-      setUrl('')
-      setError('')
-    } catch {
-      setError('Enter a valid http:// or https:// URL.')
-    }
-  }
-
-  async function copyJson() {
-    await navigator.clipboard?.writeText(json)
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), 1600)
-  }
-
-  return (
-    <main className="min-h-screen bg-[#f7f8fa] text-[#17202b]">
-      <div className="mx-auto max-w-5xl px-5 py-10 sm:px-8 lg:py-16">
-        <header className="mb-10 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-[#18232f] text-white shadow-sm"><ShieldCheck className="size-5" /></span>
-            <div><p className="text-sm font-semibold tracking-tight">/allowlist</p><p className="text-xs text-[#7a8591]">Safe URL access control</p></div>
-          </div>
-          <span className="rounded-full border border-[#dfe4e9] bg-white px-3 py-1.5 text-xs font-medium text-[#66717d]">{urls.length} allowed</span>
-        </header>
-
-        <section className="mb-8 max-w-2xl">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[#4c9570]">AI-readable configuration</p>
-          <h1 className="text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">URL allowlist</h1>
-          <p className="mt-4 text-base leading-7 text-[#697581]">These are the only website origins the user is allowed to add or use. Copy the JSON below and give it directly to an AI or tool.</p>
-        </section>
-
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <section className="rounded-2xl border border-[#dfe4e9] bg-white p-5 shadow-[0_8px_30px_rgba(29,43,56,0.04)] sm:p-6">
-            <div className="mb-5 flex items-center justify-between gap-4"><div><h2 className="font-semibold">Allowed URLs</h2><p className="mt-1 text-sm text-[#7b8691]">Trusted origins for user access.</p></div><Globe2 className="size-5 text-[#7ca58d]" /></div>
-            <div className="space-y-2">{urls.map((site) => <div key={site} className="flex items-center gap-3 rounded-xl border border-[#e8ebee] px-3.5 py-3"><span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#e9f5ed] text-[#4a956d]"><Check className="size-3.5" /></span><code className="min-w-0 truncate text-sm text-[#344250]">{site}</code>{!initialUrls.includes(site) && <button onClick={() => setUrls((current) => current.filter((item) => item !== site))} className="ml-auto rounded-md p-1.5 text-[#9aa3ad] hover:bg-[#fff1f0] hover:text-[#bd5b55]" aria-label={`Remove ${site}`}><Trash2 className="size-4" /></button>}</div>)}</div>
-            <form onSubmit={addUrl} className="mt-6 border-t border-[#edf0f2] pt-5"><label htmlFor="new-url" className="mb-2 block text-sm font-medium">Add an allowed URL</label><div className="flex gap-2"><input id="new-url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com" className="min-w-0 flex-1 rounded-lg border border-[#dfe4e9] bg-[#fbfcfd] px-3 py-2.5 text-sm outline-none ring-[#80b797] placeholder:text-[#a4adb6] focus:ring-2" /><button type="submit" className="inline-flex items-center gap-2 rounded-lg bg-[#1e6545] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#164d35]"><Plus className="size-4" /> Add</button></div>{error && <p className="mt-2 text-xs text-[#bd5b55]">{error}</p>}</form>
-          </section>
-
-          <section className="rounded-2xl bg-[#18232f] p-5 text-[#dce5eb] shadow-[0_8px_30px_rgba(29,43,56,0.12)] sm:p-6"><div className="mb-5 flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#88c0a0]">slashallowlist</p><h2 className="mt-1 font-semibold text-white">Configuration JSON</h2></div><button onClick={copyJson} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-[#b9c6cf] hover:bg-white/10 hover:text-white" aria-label="Copy JSON"><Copy className="size-3.5" />{copied ? 'Copied' : 'Copy'}</button></div><pre className="overflow-x-auto rounded-xl border border-white/10 bg-[#111a23] p-4 font-mono text-[13px] leading-7"><code><span className="text-[#a8d2b5]">{json}</span></code></pre><div className="mt-5 flex gap-3 rounded-xl border border-[#d9b46d]/20 bg-[#d9b46d]/10 p-3 text-xs leading-5 text-[#d9c99f]"><Clipboard className="mt-0.5 size-4 shrink-0" /><p>Use this JSON as the source of truth. New user URLs should be reviewed before they are added.</p></div></section>
-        </div>
-      </div>
-    </main>
-  )
+  return <main className="min-h-screen bg-[#f7f8fa] text-[#17202b]"><div className="mx-auto max-w-5xl px-5 py-10 sm:px-8 lg:py-14"><header className="mb-10 flex items-center justify-between"><div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-[#18232f] text-white"><ShieldCheck className="size-5" /></span><div><p className="text-sm font-semibold">/allowlist</p><p className="text-xs text-[#7a8591]">AI-readable URL access control</p></div></div><span className="rounded-full border border-[#dfe4e9] bg-white px-3 py-1.5 text-xs font-medium text-[#66717d]">{config.allowed_urls.length} allowed</span></header>
+    {!unlocked ? <section className="mx-auto max-w-md rounded-2xl border border-[#dfe4e9] bg-white p-6 shadow-sm"><LockKeyhole className="mb-4 size-7 text-[#4c9570]" /><h1 className="text-2xl font-semibold">Admin dashboard</h1><p className="mt-2 text-sm leading-6 text-[#697581]">Enter the dashboard password to edit the title and allowed URLs.</p><form onSubmit={unlock} className="mt-6 space-y-3"><label htmlFor="password" className="block text-sm font-medium">Password</label><input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-lg border border-[#dfe4e9] px-3 py-2.5 outline-none focus:ring-2 focus:ring-[#80b797]" placeholder="Enter password" /><button className="w-full rounded-lg bg-[#1e6545] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#164d35]">Unlock dashboard</button>{error && <p className="text-xs text-[#bd5b55]">{error}</p>}</form></section> : <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]"><section className="rounded-2xl border border-[#dfe4e9] bg-white p-5 shadow-sm sm:p-6"><div className="mb-6 flex items-center justify-between"><div><h1 className="font-semibold">Edit allowlist</h1><p className="mt-1 text-sm text-[#7b8691]">Changes are saved permanently.</p></div><button onClick={save} className="inline-flex items-center gap-2 rounded-lg bg-[#1e6545] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#164d35]"><Save className="size-4" /> Save</button></div><label htmlFor="title" className="mb-2 block text-sm font-medium">Title</label><input id="title" value={title} onChange={(event) => setTitle(event.target.value)} className="mb-6 w-full rounded-lg border border-[#dfe4e9] px-3 py-2.5 outline-none focus:ring-2 focus:ring-[#80b797]" /><div className="space-y-2">{urls.map((site) => <div key={site} className="flex items-center gap-3 rounded-xl border border-[#e8ebee] px-3.5 py-3"><span className="flex size-6 items-center justify-center rounded-full bg-[#e9f5ed] text-[#4a956d]"><Check className="size-3.5" /></span><code className="min-w-0 truncate text-sm">{site}</code><button onClick={() => setUrls(urls.filter((item) => item !== site))} className="ml-auto rounded-md p-1.5 text-[#9aa3ad] hover:text-[#bd5b55]" aria-label={`Remove ${site}`}><Trash2 className="size-4" /></button></div>)}</div><form onSubmit={addUrl} className="mt-6 border-t border-[#edf0f2] pt-5"><label htmlFor="new-url" className="mb-2 block text-sm font-medium">Add an allowed URL</label><div className="flex gap-2"><input id="new-url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com" className="min-w-0 flex-1 rounded-lg border border-[#dfe4e9] px-3 py-2.5 text-sm" /><button className="inline-flex items-center gap-2 rounded-lg bg-[#18232f] px-4 py-2.5 text-sm text-white"><Plus className="size-4" /> Add</button></div>{error && <p className="mt-2 text-xs text-[#bd5b55]">{error}</p>}{message && <p className="mt-2 text-xs text-[#367653]">{message}</p>}</form></section><section className="rounded-2xl bg-[#18232f] p-5 text-[#dce5eb] shadow-sm sm:p-6"><div className="mb-5 flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#88c0a0]">Live JSON</p><h2 className="mt-1 font-semibold text-white">Configuration</h2></div><button onClick={copyJson} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-[#b9c6cf] hover:bg-white/10" aria-label="Copy JSON"><Copy className="size-3.5" />{copied ? 'Copied' : 'Copy'}</button></div><pre className="overflow-x-auto rounded-xl border border-white/10 bg-[#111a23] p-4 font-mono text-[13px] leading-7"><code>{json}</code></pre></section></div>}
+  </div></main>
 }
-
-void Clipboard
