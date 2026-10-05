@@ -47,7 +47,12 @@ export default function Page() {
       .then((response) => (response.ok ? response.json() : null))
       .then((data: AllowlistConfig | null) => {
         if (!data || !Array.isArray(data.allowed_urls)) return
-        setAllowedSites(data.allowed_urls.filter((item) => item && typeof item.url === 'string' && item.comment?.trim()))
+        const normalized = data.allowed_urls.flatMap((item) => {
+          if (typeof item === 'string' && item.trim()) return [{ url: item.trim() }]
+          if (!item || typeof item !== 'object' || typeof item.url !== 'string' || !item.url.trim()) return []
+          return [{ url: item.url.trim(), ...(typeof item.comment === 'string' && item.comment.trim() ? { comment: item.comment.trim() } : {}) }]
+        })
+        setAllowedSites(normalized.filter((item) => item.comment))
       })
       .catch(() => undefined)
   }, [])
