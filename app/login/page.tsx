@@ -22,7 +22,7 @@ export default function LoginPage() {
         setError('Incorrect password.')
         return
       }
-      window.location.href = '/allowed_urls'
+      window.location.href = '/allowed_urls?edit=1'
     } catch {
       setError('Unable to connect to the dashboard.')
     } finally {
